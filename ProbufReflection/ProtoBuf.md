@@ -177,4 +177,4 @@ static ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadataStatic() {
 <!-- _footer: 03. PB 如何实现反射 -->
 <!-- 通过上面的对几种反射方案的总结，不难看出：反射机制的实现，需要如下两个基础 -->
 
-![image](./DescriptorClass.PNG)
+![image](./DescriptorClass.jpg)
