@@ -11,7 +11,7 @@ footer: ""
 
 # **ProtoBuf反射原理探究**
 
--- by lihaiming
+-- by lihaiming@byedance.com
 
 ---
 <!-- _class:  -->
@@ -175,6 +175,111 @@ static ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadataStatic() {
 ---
 <!-- _class: -->
 <!-- _footer: 03. PB 如何实现反射 -->
-<!-- 通过上面的对几种反射方案的总结，不难看出：反射机制的实现，需要如下两个基础 -->
+<!--
+- FieldDescriptor 是对 PB 结构中字段的描述，记录了字段的名字、类型、序号、以及一个由整型、枚举、浮点型、布尔值以及字符串组成的联合体来表示各种简单类型字段的默认值（复杂结构如引用的 PB 结构没有默认值，但引用的 PB 结构本身的简单字段有默认值）。成员Type type_表示该字段的类型，包括各类简单类型以及 PB 结构（也就是 TYPE_MESSAGE）等。Type 枚举的定义如下所示。
+- Descriptor 是对 PB 结构的描述，其中包含了一个 FieldDescriptor 组成的数组FieldDescriptor* fields_，同时也用Descriptor* nested_types_数组来代表 PB 结构内部定义的 PB 结构，类似 C++ 中内部类的概念。一个 PB 结构中任意类型的字段，都可以使用 FieldDescriptor 来表示。
+- FileDescriptor 则是对整个 .proto 文件的描述，其内包含了描述一个 .proto 文件所需要的所有元素，比如：名字、包、依赖的其他 .proto 文件、PB 结构（Descriptor）、枚举（EnumDescriptor）等等。
+通过 Descriptor 我们可以获取到所有字段的字段描述符 FieldDescriptor 并获知每个字段的类型、名字、标签等等信息，这也是反射机制能实现的一个重要基础。
+ -->
 
-![image](./DescriptorClass.jpg)
+### **Descriptor**
+
+![image w:1200](./Descriptor1.jpg)
+
+- **FileDescriptor**: 文件描述符。
+- **Descriptor**: PB 结构描述符。
+- **FieldDescriptor**: 字段描述符。
+
+---
+<!-- _class: -->
+<!-- _footer: 03. PB 如何实现反射 -->
+<!--
+通过 Descriptor 可以获知到类的结构，但是 Descriptor 只是所有 PB 类共有的一个描述符，而且这个信息，并不涉及类的内存排布，每个字段和类中各成员的对应关系是无法获知的。因此无法仅通过 Descriptor 结构直接操作实例中的成员。这时就需要将描述性的 Descriptor 结构与具体实例建设映射关系——建立结构信息与具体实例的映射，能通过结构信息直接操作对象实例的具体成员。
+这个机制，就是通过 Reflection 结构来实现的。先来看看 Reflection 的结构。
+- descriptor_：指向类对应描述信息。
+- schema_：ReflectionSchema 结构，这是将描述信息映射到具体实例的关键性结构。其中存储了对应 PB 结构的默认实例的指针，以及各成员的内存偏移数组 offsets_。-->
+
+### **Reflection**
+
+![bg right:50% w:600](./Reflection.jpg)
+
+- **schema_**: 存储映射关系。
+  - **offset_**: 存储字段地址偏移。
+
+---
+<!-- _class: -->
+<!-- _footer: 03. PB 如何实现反射 -->
+<!-- 接下来我们通过一个具体例子来看看 PB 是如何通过 Reflection 以及 Descriptor 来操作一个具体实例的。例子也很简单，就是修改一个 PB 结构的age 字段, 首先要根据字段名查找字段描述符，然后通过 Reflection 类型对字段描述符进行操作。-->
+
+## **反射操作实例**
+
+```c++
+void ChangeAge(const Message& msg, unsigned int newAge) {
+    const Descriptor* pDescriptor = msg.GetDescriptor();
+    const Reflection* pReflection = msg.GetReflection();
+    const FieldDescriptor* pAgeField = pDescriptor->FindFieldByName("age");
+    if (nullptr != pAgeField) {
+        return;
+    }
+    pReflection->SetUInt32(&msg, pAgeField, newAge);
+}
+int main() {
+    Cat c; // cat 是一个PB结构
+    c.set_age(1);
+    ChangeAge(c, c.age() + 1); // 年龄增大一岁
+}
+```
+
+---
+<!-- _class: -->
+<!-- _footer: 03. PB 如何实现反射 -->
+<!-- 接下来我们就看看 Reflection 是如何修改了 PB 结构的成员的。具体的实现在SetUInt32()函数 之中，其调用过程如下, 可以看到，最终是通过 MutableRaw 函数，直接取到了字段对应的地址，然后给它赋值。-->
+
+### **调用过程**
+
+![bg h:600](./Call1.jpg)
+
+---
+<!-- _class: -->
+<!-- _footer: 03. PB 如何实现反射 -->
+<!-- 所以核心就在于如何能给直接获取到字段的地址，下面我们结合代码分析一下. 首先这里调用了GetPointerAtOffset()函数，这里的目的就是通过地址偏移，获取 message 对象的成员地址。那么成员地址的偏移，就是通过 schema_ 来计算的 -->
+### **源码分析 -- MutableRaw**
+
+```c++
+//generated_message_reflection.cc
+template <typename Type>
+Type* Reflection::MutableRaw(Message* message,
+                             const FieldDescriptor* field) const {
+  return GetPointerAtOffset<Type>(message, schema_.GetFieldOffset(field));
+｝
+
+template <class To>
+To* GetPointerAtOffset(Message* message, uint32 offset) {
+  return reinterpret_cast<To*>(reinterpret_cast<char*>(message) + offset);
+}
+```
+
+---
+<!-- _class: -->
+<!-- _footer: 03. PB 如何实现反射 -->
+<!-- 追踪GetFieldOffset()函数的调用过程我们可以看到这里是使用 FieldDescriptor 的 index 成员作为下标，来获取 offsets_ 数组中的元素，也就是说：offsets_ 数组中存储了 Message 结构中个成员的地址相对偏移量。 -->
+
+```c++
+struct ReflectionSchema {
+  uint32 GetFieldOffset(const FieldDescriptor* field) const {
+    return GetFieldOffsetNonOneof(field);
+  }
+  uint32 GetFieldOffsetNonOneof(const FieldDescriptor* field) const {
+    GOOGLE_DCHECK(!field->containing_oneof());
+    return OffsetValue(offsets_[field->index()], field->type());
+  }
+  static uint32 OffsetValue(uint32 v, FieldDescriptor::Type type) {
+    if (type == FieldDescriptor::TYPE_STRING ||
+        type == FieldDescriptor::TYPE_BYTES) {
+      return v & ~1u;
+    } else {
+      return v;
+    }
+  }
+}
+```
