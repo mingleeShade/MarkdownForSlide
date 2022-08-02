@@ -262,7 +262,10 @@ To* GetPointerAtOffset(Message* message, uint32 offset) {
 ---
 <!-- _class: -->
 <!-- _footer: 03. PB 如何实现反射 -->
-<!-- 追踪GetFieldOffset()函数的调用过程我们可以看到这里是使用 FieldDescriptor 的 index 成员作为下标，来获取 offsets_ 数组中的元素，也就是说：offsets_ 数组中存储了 Message 结构中个成员的地址相对偏移量。 -->
+<!-- 追踪GetFieldOffset()函数的调用过程我们可以看到这里是使用 FieldDescriptor 的 index 成员作为下标，来获取 offsets_ 数组中的元素，也就是说：offsets_ 数组中存储了 Message 结构中个成员的地址相对偏移量。
+
+另外有个小细节：OffsetValue()函数针对两种字符串类型 TYPE_STRING 和 TYPE_BYTES 做了特殊处理，返回的地址偏移时，将最低位置空了，这是因为由于字节对齐的关系，字符串类型的成员地址偏移通常是 8 的整数倍（64位操作系统下），也就是意味着字符串成员的地址偏移的最低三位是 0，因此这里利用了这个性质，将最低一位用来存储 inlined 标记，这个 inlined 标记用来表示字符串成员使用的字符串类型是 ArenaStringPtr 类型还是 InlinedStringField 类型。具体两种字符串结构的区别这里就不过多深入了。
+ -->
 
 ```c++
 struct ReflectionSchema {
@@ -283,3 +286,10 @@ struct ReflectionSchema {
   }
 }
 ```
+
+---
+<!-- _class: -->
+<!-- _footer: 03. PB 如何实现反射 -->
+## **小结**
+- **Descriptor**：**描述**类的字段、方法等
+- **Reflection**：将通过地址偏移，将描述符与类的实例进行**映射**
