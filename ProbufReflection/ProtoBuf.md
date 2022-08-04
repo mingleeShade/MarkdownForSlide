@@ -293,3 +293,54 @@ struct ReflectionSchema {
 ## **小结**
 - **Descriptor**：**描述**类的字段、方法等
 - **Reflection**：将通过地址偏移，将描述符与类的实例进行**映射**
+
+---
+<!-- _class: lead -->
+<!-- 两个关键结构的构造过程主要分为两部分，第一部分在进程开始时调用，主要是为了生成默认实例、将 FieldDescriptor 结构序列化后的二进制加入 DescriptorPool 之中，以及将 DescriptorTable 注册到 MessageFactory 之中。 -->
+# **04**  反射信息如何构建
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
+<!-- 自动生成的 .pb.cc 源文件里面会定义一个 const 全局变量 -->
+## **进程启动时构造**
+
+### **全局 DescriptorTable 变量**
+
+![imega w:1150](./BuildDescriptorTable.png)
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
+<!-- 自动生成的 .pb.cc 源文件里面会定义一个 const 全局变量 -->
+<!-- 这个变量的类型为 DescriptorTable，类型结构如下，这个全局变量存了很多关键信息，里面的每一项成员的大致含义已经标注在下图，具体细节暂且不表，目前只需要知道这个结构存储了与 .proto 文件有关的各种描述信息，这些信息后续会用来构造 Descriptor 和 Reflection。 -->
+### **DescriptorTable 定义**
+
+![imega w:1150](./DescriptorTable.png)
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
+### **生成 Descriptor**
+![bg right:35% h:502](./InitFunc.jpg)
+```c++
+void AddDescriptorsImpl(const DescriptorTable* table) {
+  for (int i = 0; i < table->num_sccs; i++) {
+    internal::InitSCC(table->init_default_instances[i]);
+  }
+  for (int i = 0; i < table->num_deps; i++) {
+    if (table->deps[i]) AddDescriptors(table->deps[i]);
+  }
+  DescriptorPool::InternalAddGeneratedFile(table->descriptor, table->size);
+  MessageFactory::InternalRegisterGeneratedFile(table);
+}
+```
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
+![bg h:720](./BigPicture.png)
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
