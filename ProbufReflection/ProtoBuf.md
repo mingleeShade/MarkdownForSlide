@@ -321,17 +321,24 @@ struct ReflectionSchema {
 ---
 <!-- _class: -->
 <!-- _footer: 04. 反射信息如何构建 -->
+<!-- 第一部分代码遍历了table->init_default_instances数组中的每一个 SCCInfoBase结构，并将其传入InitSCC函数，这一步主要是为了构造默认的实例，init_default_instances 的变量名也清楚的表述这一点。具体调用过程具体过程如下： -->
 ### **生成 Descriptor**
+
 ![bg right:35% h:502](./InitFunc.jpg)
+
 ```c++
 void AddDescriptorsImpl(const DescriptorTable* table) {
+  // 初始化默认实例
   for (int i = 0; i < table->num_sccs; i++) {
     internal::InitSCC(table->init_default_instances[i]);
   }
+  // 对依赖的其他.proto文件递归调用 AddDescriptors
   for (int i = 0; i < table->num_deps; i++) {
     if (table->deps[i]) AddDescriptors(table->deps[i]);
   }
+  // 解析并缓存 descriptor 二进制串
   DescriptorPool::InternalAddGeneratedFile(table->descriptor, table->size);
+  // DescriptorTable 缓存到 MessageFactory 中
   MessageFactory::InternalRegisterGeneratedFile(table);
 }
 ```
@@ -339,8 +346,85 @@ void AddDescriptorsImpl(const DescriptorTable* table) {
 ---
 <!-- _class: -->
 <!-- _footer: 04. 反射信息如何构建 -->
-![bg h:720](./BigPicture.png)
+- **初
+始
+化
+默
+认
+实
+例**
+![bg right:2 h:720](./BigPicture.png)
 
 ---
 <!-- _class: -->
 <!-- _footer: 04. 反射信息如何构建 -->
+
+- **.pb.c 文件中存储的 descriptor**
+
+![imega](./FileProto.png)
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
+
+- **构建索引，存储 descriptor**
+
+```c++
+//descriptor_database.cc
+bool EncodedDescriptorDatabase::Add(const void* encoded_file_descriptor,
+                                    int size) {
+  FileDescriptorProto file;
+  if (file.ParseFromArray(encoded_file_descriptor, size)) {
+    return index_.AddFile(file, std::make_pair(encoded_file_descriptor, size));
+  } else {
+    GOOGLE_LOG(ERROR) << "Invalid file descriptor data passed to "
+                  "EncodedDescriptorDatabase::Add().";
+    return false;
+  }
+}
+```
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
+<!-- 如上所示，调用GetDescriptor()或者GetReflection()都会触发GetMetadataStatic()调用，并从元数据中返回所需的 Descriptor 或者 Reflection 结构，而元数据，实际上就是 DescriptorTable 类型的一个成员变量。这个 DescriptorTable 实例就是之前出现过的定义在test.pb.cc 中的 descriptor_table_test_2eproto 全局变量。而返回元数据之前，其实调用了AssignDescriptors()函数来确保 Descriptor 真正分配了并且只分配了一次。而这个只能分配一次，是由 C++11 引入的新机制 call_once 机制来确保的，结合 std::once_flag 即使在多线程环境，也能确保在只会调用一次真正进行数据分配的函数AssignDescriptorsImpl()。 -->
+## **使用时构造**
+
+![bg w:487](./RuntimeBuild.jpg)
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
+
+```c++
+void AssignDescriptorsImpl(const DescriptorTable* table) {
+  ...
+  // 构造 Descriptor
+  const FileDescriptor* file =
+      DescriptorPool::internal_generated_pool()->FindFileByName(
+          table->filename);
+  GOOGLE_CHECK(file != nullptr);
+
+  MessageFactory* factory = MessageFactory::generated_factory();
+
+  // 构造 Reflection
+  AssignDescriptorsHelper helper(
+      factory, table->file_level_metadata, table->file_level_enum_descriptors,
+      table->schemas, table->default_instances, table->offsets);
+
+  for (int i = 0; i < file->message_type_count(); i++) {
+    helper.AssignMessageDescriptor(file->message_type(i));
+  }
+
+  for (int i = 0; i < file->enum_type_count(); i++) {
+    helper.AssignEnumDescriptor(file->enum_type(i));
+  }
+  if (file->options().cc_generic_services()) {
+    for (int i = 0; i < file->service_count(); i++) {
+      table->file_level_service_descriptors[i] = file->service(i);
+    }
+  }
+  MetadataOwner::Instance()->AddArray(table->file_level_metadata,
+                                      helper.GetCurrentMetadataPtr());
+}
+```
