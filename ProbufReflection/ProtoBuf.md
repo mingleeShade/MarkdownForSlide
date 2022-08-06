@@ -291,6 +291,7 @@ struct ReflectionSchema {
 <!-- _class: -->
 <!-- _footer: 03. PB 如何实现反射 -->
 ## **小结**
+
 - **Descriptor**：**描述**类的字段、方法等
 - **Reflection**：将通过地址偏移，将描述符与类的实例进行**映射**
 
@@ -404,27 +405,107 @@ void AssignDescriptorsImpl(const DescriptorTable* table) {
       DescriptorPool::internal_generated_pool()->FindFileByName(
           table->filename);
   GOOGLE_CHECK(file != nullptr);
-
+  // 构造 AssignDescriptorsHelper
   MessageFactory* factory = MessageFactory::generated_factory();
-
-  // 构造 Reflection
   AssignDescriptorsHelper helper(
       factory, table->file_level_metadata, table->file_level_enum_descriptors,
       table->schemas, table->default_instances, table->offsets);
-
+  // 通过 helper 实例来构造 Reflection
   for (int i = 0; i < file->message_type_count(); i++) {
     helper.AssignMessageDescriptor(file->message_type(i));
   }
-
-  for (int i = 0; i < file->enum_type_count(); i++) {
-    helper.AssignEnumDescriptor(file->enum_type(i));
-  }
-  if (file->options().cc_generic_services()) {
-    for (int i = 0; i < file->service_count(); i++) {
-      table->file_level_service_descriptors[i] = file->service(i);
-    }
-  }
-  MetadataOwner::Instance()->AddArray(table->file_level_metadata,
-                                      helper.GetCurrentMetadataPtr());
+  ...
 }
 ```
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
+
+## **构造 Descriptor**
+
+![bg h:700](./BuildDescriptor1.jpg)
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
+
+## **构造 Descriptor** 
+
+![bg h:700](./BuildDescriptor2.jpg)
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
+
+## **构造 Reflection**
+
+```c++
+void AssignMessageDescriptor(const Descriptor* descriptor) {
+  ...
+  file_level_metadata_->descriptor = descriptor;
+  file_level_metadata_->reflection =
+      new Reflection(descriptor,
+                      MigrationToReflectionSchema(default_instance_data_, offsets_, *schemas_),
+                      DescriptorPool::internal_generated_pool(), factory_);
+  ...
+}
+```
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
+## **构造 Reflection**
+
+```c++
+ReflectionSchema MigrationToReflectionSchema(const Message* const* default_instance,
+  const uint32* offsets, MigrationSchema migration_schema) {
+  ReflectionSchema result;
+  result.default_instance_ = *default_instance;
+  result.offsets_ = offsets + migration_schema.offsets_index + 5;
+  result.has_bit_indices_ = offsets + migration_schema.has_bit_indices_index;
+  result.has_bits_offset_ = offsets[migration_schema.offsets_index + 0];
+  result.metadata_offset_ = offsets[migration_schema.offsets_index + 1];
+  result.extensions_offset_ = offsets[migration_schema.offsets_index + 2];
+  result.oneof_case_offset_ = offsets[migration_schema.offsets_index + 3];
+  result.object_size_ = migration_schema.object_size;
+  result.weak_field_map_offset_ = offsets[migration_schema.offsets_index + 4];
+  return result;
+}
+```
+
+---
+<!-- _class: -->
+<!-- _footer: 04. 反射信息如何构建 -->
+
+```c++
+const ::PROTOBUF_NAMESPACE_ID::uint32 TableStruct_test_2eproto::offsets[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::Msg::Leg, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  PROTOBUF_FIELD_OFFSET(::Msg::Leg, front_),
+  PROTOBUF_FIELD_OFFSET(::Msg::Cat_DogFriendsEntry_DoNotUse, _has_bits_),
+  PROTOBUF_FIELD_OFFSET(::Msg::Cat_DogFriendsEntry_DoNotUse, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  PROTOBUF_FIELD_OFFSET(::Msg::Cat_DogFriendsEntry_DoNotUse, key_),
+  PROTOBUF_FIELD_OFFSET(::Msg::Cat_DogFriendsEntry_DoNotUse, value_),
+  ...
+}
+static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
+  { 0, -1, sizeof(::Msg::Leg)},
+  { 6, 13, sizeof(::Msg::Cat_DogFriendsEntry_DoNotUse)},
+  { 15, -1, sizeof(::Msg::Cat)},
+  { 31, 38, sizeof(::Msg::Dog_CatFriendsEntry_DoNotUse)},
+  { 40, -1, sizeof(::Msg::Dog)},
+  { 52, 59, sizeof(::Msg::Human_PetAgesEntry_DoNotUse)},
+  { 61, -1, sizeof(::Msg::Human)},
+};
+```
+
+---
+
+# **谢谢:exclamation:**
