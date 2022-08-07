@@ -4,10 +4,10 @@ theme: gaia
 class: lead
 paginate: true
 _paginate: false
-header: "![w:30 h:30](../Assert/BytedanceBigIcon.png)**ByteDance**"
+header: "![w:30 h:30](BytedanceBigIcon.png)**ByteDance**"
 footer: ""
 ---
-![w:300 h:300](../Assert/BytedanceBigIcon.png)
+![w:300 h:300](BytedanceBigIcon.png)
 
 # **ProtoBuf反射原理探究**
 
@@ -16,7 +16,7 @@ footer: ""
 ---
 <!-- _class:  -->
 
-![bg left:33%](../Assert/27-720x720.jpg)
+![bg left:33%](./27-720x720.jpg)
 
 # **:file_folder: 目录**
 
@@ -72,7 +72,7 @@ int main()
 <!-- Java 的反射机制依赖于编译时生成的 .class 字节码文件，该文件中记录了类的各种类型信息，然后通过加载到内存生成一个唯一的 Class 对象，因此，对应的类对象可以通过该 Class 对象获取到类的方法、属性以及构造函数等。-->
 ## **Java**
 
-![image](../Assert/JavaReflection.PNG)
+![image](JavaReflection.PNG)
 
 ---
 <!-- _class: -->
@@ -184,7 +184,7 @@ static ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadataStatic() {
 
 ### **Descriptor**
 
-![image w:1200](../Assert/Descriptor1.jpg)
+![image w:1200](./Descriptor1.jpg)
 
 - **FileDescriptor**: 文件描述符。
 - **Descriptor**: PB 结构描述符。
@@ -201,7 +201,7 @@ static ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadataStatic() {
 
 ### **Reflection**
 
-![bg right:50% w:600](../Assert/Reflection.jpg)
+![bg right:50% w:600](./Reflection.jpg)
 
 - **schema_**: 存储映射关系。
   - **offset_**: 存储字段地址偏移。
@@ -237,7 +237,7 @@ int main() {
 
 ### **调用过程**
 
-![bg h:600](../Assert/Call1.jpg)
+![bg h:600](./Call1.jpg)
 
 ---
 <!-- _class: -->
@@ -308,7 +308,7 @@ struct ReflectionSchema {
 
 ### **全局 DescriptorTable 变量**
 
-![imega w:1150](../Assert/BuildDescriptorTable.png)
+![imega w:1150](./BuildDescriptorTable.png)
 
 ---
 <!-- _class: -->
@@ -317,7 +317,7 @@ struct ReflectionSchema {
 <!-- 这个变量的类型为 DescriptorTable，类型结构如下，这个全局变量存了很多关键信息，里面的每一项成员的大致含义已经标注在下图，具体细节暂且不表，目前只需要知道这个结构存储了与 .proto 文件有关的各种描述信息，这些信息后续会用来构造 Descriptor 和 Reflection。 -->
 ### **DescriptorTable 定义**
 
-![imega w:1150](../Assert/DescriptorTable.png)
+![imega w:1150](./DescriptorTable.png)
 
 ---
 <!-- _class: -->
@@ -325,7 +325,7 @@ struct ReflectionSchema {
 <!-- 第一部分代码遍历了table->init_default_instances数组中的每一个 SCCInfoBase结构，并将其传入InitSCC函数，这一步主要是为了构造默认的实例，init_default_instances 的变量名也清楚的表述这一点。具体调用过程具体过程如下： -->
 ### **生成 Descriptor**
 
-![bg right:35% h:502](../Assert/InitFunc.jpg)
+![bg right:35% h:502](./InitFunc.jpg)
 
 ```c++
 void AddDescriptorsImpl(const DescriptorTable* table) {
@@ -354,7 +354,7 @@ void AddDescriptorsImpl(const DescriptorTable* table) {
 认
 实
 例**
-![bg right:2 h:720](../Assert/BigPicture.png)
+![bg right:2 h:720](./BigPicture.png)
 
 ---
 <!-- _class: -->
@@ -362,7 +362,7 @@ void AddDescriptorsImpl(const DescriptorTable* table) {
 
 - **.pb.c 文件中存储的 descriptor**
 
-![imega](../Assert/FileProto.png)
+![imega](./FileProto.png)
 
 ---
 <!-- _class: -->
@@ -391,7 +391,7 @@ bool EncodedDescriptorDatabase::Add(const void* encoded_file_descriptor,
 <!-- 如上所示，调用GetDescriptor()或者GetReflection()都会触发GetMetadataStatic()调用，并从元数据中返回所需的 Descriptor 或者 Reflection 结构，而元数据，实际上就是 DescriptorTable 类型的一个成员变量。这个 DescriptorTable 实例就是之前出现过的定义在test.pb.cc 中的 descriptor_table_test_2eproto 全局变量。而返回元数据之前，其实调用了AssignDescriptors()函数来确保 Descriptor 真正分配了并且只分配了一次。而这个只能分配一次，是由 C++11 引入的新机制 call_once 机制来确保的，结合 std::once_flag 即使在多线程环境，也能确保在只会调用一次真正进行数据分配的函数AssignDescriptorsImpl()。 -->
 ## **使用时构造**
 
-![bg w:487](../Assert/RuntimeBuild.jpg)
+![bg w:487](./RuntimeBuild.jpg)
 
 ---
 <!-- _class: -->
@@ -424,7 +424,7 @@ void AssignDescriptorsImpl(const DescriptorTable* table) {
 
 ## **构造 Descriptor**
 
-![bg h:700](../Assert/BuildDescriptor1.jpg)
+![bg h:700](./BuildDescriptor1.jpg)
 
 ---
 <!-- _class: -->
@@ -432,7 +432,7 @@ void AssignDescriptorsImpl(const DescriptorTable* table) {
 
 ## **构造 Descriptor** 
 
-![bg h:700](../Assert/BuildDescriptor2.jpg)
+![bg h:700](./BuildDescriptor2.jpg)
 
 ---
 <!-- _class: -->
